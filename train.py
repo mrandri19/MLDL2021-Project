@@ -69,8 +69,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
         loss_func = torch.nn.CrossEntropyLoss()
     max_miou = 0
     step = 0
-    for epoch in range(args.num_epochs):
-    #for epoch in range(args.epoch_start_i, args.num_epochs):   #quando carico il modello
+    for epoch in range(args.epoch_start_i, args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
         model.train()
         tq = tqdm.tqdm(total=len(dataloader_train) * args.batch_size)
@@ -169,6 +168,7 @@ def main(params):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda
     model = BiSeNet(args.num_classes, args.context_path)
     if torch.cuda.is_available() and args.use_gpu:
+        print('Training using a GPU')
         model = torch.nn.DataParallel(model).cuda()
 
     # build optimizer
@@ -201,14 +201,14 @@ if __name__ == '__main__':
         '--validation_step', '10',
         '--num_epochs', '100',
         '--learning_rate', '2.5e-2',
-        '--data', './CamVid',
+        '--data', '../CamVid',
         '--num_workers', '8',
         '--num_classes', '12',
         '--cuda', '0',
         '--batch_size', '4',
         '--save_model_path', './checkpoints_101_sgd',
         '--optimizer', 'sgd',
-
+        '--pretrained_model_path', './checkpoints_101_sgd/latest_dice_loss_epoch_84.pth',
     ]
     main(params)
 

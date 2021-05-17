@@ -10,6 +10,8 @@ from utils import get_label_info, one_hot_it, RandomCrop, reverse_one_hot, one_h
 import random
 
 def augmentation(image, label):
+    image = np.flip(image, axis=1)
+    label = np.flip(label, axis=1)
     # augment images with spatial transformation: Flip, Affine, Rotation, etc...
     return image, label
 
@@ -116,13 +118,14 @@ class CamVid(torch.utils.data.Dataset):
 
         # augment image and label
         if self.mode == 'train':
-            # set a probability of 0.5
-            img, label = augmentation(img, label)
+            if random.random() < 0.5:
+              img, label = augmentation(img, label)
 
         # augment pixel image
         if self.mode == 'train':
             # set a probability of 0.5
-            img = augmentation_pixel(img)
+            if random.random() < 0.5:
+              img = augmentation_pixel(img)
 
         # image -> [C, H, W]
 
