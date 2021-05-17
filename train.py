@@ -13,7 +13,7 @@ from utils import reverse_one_hot, compute_global_accuracy, fast_hist, \
     per_class_iu
 from loss import DiceLoss
 
-
+#prova
 def val(args, model, dataloader):
     print('start val!')
     # label_info = get_label_info(csv_path)
@@ -118,8 +118,8 @@ def main(params):
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=300, help='Number of epochs to train for')
     parser.add_argument('--epoch_start_i', type=int, default=0, help='Start counting epochs from this number')
-    parser.add_argument('--checkpoint_step', type=int, default=2, help='How often to save checkpoints (epochs)')
-    parser.add_argument('--validation_step', type=int, default=10, help='How often to perform validation (epochs)')
+    parser.add_argument('--checkpoint_step', type=int, default=1000, help='How often to save checkpoints (epochs)')
+    parser.add_argument('--validation_step', type=int, default=100, help='How often to perform validation (epochs)')
     parser.add_argument('--dataset', type=str, default="CamVid", help='Dataset you are using.')
     parser.add_argument('--crop_height', type=int, default=720, help='Height of cropped/resized input image to network')
     parser.add_argument('--crop_width', type=int, default=960, help='Width of cropped/resized input image to network')
@@ -196,8 +196,10 @@ def main(params):
 
 if __name__ == '__main__':
     params = [
-        '--epoch_start_i', '85',
-        '--num_epochs', '101',
+        '--context_path', 'resnet101',  # set resnet18 or resnet101, only support resnet18 and resnet101
+        '--checkpoint_step', '2',
+        '--validation_step', '10',
+        '--num_epochs', '100',
         '--learning_rate', '2.5e-2',
         '--data', '../CamVid',
         '--num_workers', '8',
@@ -205,7 +207,6 @@ if __name__ == '__main__':
         '--cuda', '0',
         '--batch_size', '4',
         '--save_model_path', './checkpoints_101_sgd',
-        '--context_path', 'resnet101',  # set resnet18 or resnet101, only support resnet18 and resnet101
         '--optimizer', 'sgd',
         '--pretrained_model_path', './checkpoints_101_sgd/latest_dice_loss_epoch_84.pth',
     ]

@@ -18,7 +18,27 @@ def augmentation(image, label):
 
 def augmentation_pixel(image):
     # augment images with pixel intensity transformation: GaussianBlur, Multiply, etc...
-    return image
+    r = random.randrange(2)
+    if (r==0):
+    #1) gaussian blur: reduces the noise (low-pass filter that preserves low spatial frequency and reduces image noise)
+    #it reduces the level of detail
+    #std dev su ogni asse: min=2/max=3 -> viene scelto in modo random in questo intervallo  (da provare a modificare?)
+    #kernel_size: maggiore il valore maggiore lo smoothing
+        transformer = transforms.Compose([transforms.ToTensor(),transforms.GaussianBlur(kernel_size=15, sigma=(2.0, 3.0))])
+
+    if (r==1):
+    #2) altering colors
+    #brightness: scelto valore random in [max(0, 1 - brightness), 1 + brightness]
+    #contrast: scelto valore random in [max(0, 1 - contrast), 1 + contrast]
+    #saturation: scelto valore random in [max(0, 1 - saturation), 1 + saturation]
+    #hue: scelto valore random in [-hue, hue]
+        transformer = transforms.Compose([transforms.ToTensor(), transforms.ColorJitter(brightness=1, contrast=2, saturation=2, hue=0.2)])
+
+    if (r==2):
+    #3)  convert image to grayscale
+        transformer = transforms.Compose([transforms.ToTensor(),transforms.Grayscale(num_output_channels=3)])
+
+    return (((transformer(image)).permute(1,2,0).numpy())*255).astype(np.uint8)
 
 
 class CamVid(torch.utils.data.Dataset):
@@ -108,6 +128,7 @@ class CamVid(torch.utils.data.Dataset):
               img = augmentation_pixel(img)
 
         # image -> [C, H, W]
+
         img = Image.fromarray(img)
         img = self.to_tensor(img).float()
 
