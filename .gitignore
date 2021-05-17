@@ -1,3 +1,5 @@
 __pycache__/
-runs//
 runs/
+checkpoints_101_sgd/
+checkpoints_18_sgd/
+
