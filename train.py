@@ -69,7 +69,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
         loss_func = torch.nn.CrossEntropyLoss()
     max_miou = 0
     step = 0
-    for epoch in range(args.num_epochs):
+    for epoch in range(args.epoch_start_i, args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
         model.train()
         tq = tqdm.tqdm(total=len(dataloader_train) * args.batch_size)
@@ -100,13 +100,12 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
             if not os.path.isdir(args.save_model_path):
                 os.mkdir(args.save_model_path)
             torch.save(model.module.state_dict(),
-                       os.path.join(args.save_model_path, 'latest_dice_loss.pth'))
+                       os.path.join(args.save_model_path, f'latest_dice_loss_epoch_{epoch}.pth'))
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
             if miou > max_miou:
                 max_miou = miou
-                import os 
                 os.makedirs(args.save_model_path, exist_ok=True)
                 torch.save(model.module.state_dict(),
                            os.path.join(args.save_model_path, 'best_dice_loss.pth'))
@@ -119,7 +118,7 @@ def main(params):
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=300, help='Number of epochs to train for')
     parser.add_argument('--epoch_start_i', type=int, default=0, help='Start counting epochs from this number')
-    parser.add_argument('--checkpoint_step', type=int, default=100, help='How often to save checkpoints (epochs)')
+    parser.add_argument('--checkpoint_step', type=int, default=2, help='How often to save checkpoints (epochs)')
     parser.add_argument('--validation_step', type=int, default=10, help='How often to perform validation (epochs)')
     parser.add_argument('--dataset', type=str, default="CamVid", help='Dataset you are using.')
     parser.add_argument('--crop_height', type=int, default=720, help='Height of cropped/resized input image to network')
@@ -169,6 +168,7 @@ def main(params):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda
     model = BiSeNet(args.num_classes, args.context_path)
     if torch.cuda.is_available() and args.use_gpu:
+        print('Training using a GPU')
         model = torch.nn.DataParallel(model).cuda()
 
     # build optimizer
@@ -196,17 +196,18 @@ def main(params):
 
 if __name__ == '__main__':
     params = [
-        '--num_epochs', '1000',
+        '--epoch_start_i', '85',
+        '--num_epochs', '101',
         '--learning_rate', '2.5e-2',
-        '--data', './CamVid',
+        '--data', '../CamVid',
         '--num_workers', '8',
         '--num_classes', '12',
         '--cuda', '0',
         '--batch_size', '4',
-        '--save_model_path', './checkpoints_18_sgd',
-        '--context_path', 'resnet18',  # set resnet18 or resnet101, only support resnet18 and resnet101
+        '--save_model_path', './checkpoints_101_sgd',
+        '--context_path', 'resnet101',  # set resnet18 or resnet101, only support resnet18 and resnet101
         '--optimizer', 'sgd',
-
+        '--pretrained_model_path', './checkpoints_101_sgd/latest_dice_loss_epoch_84.pth',
     ]
     main(params)
 
