@@ -13,7 +13,7 @@ from utils import reverse_one_hot, compute_global_accuracy, fast_hist, \
     per_class_iu
 from loss import DiceLoss
 
-
+#prova
 def val(args, model, dataloader):
     print('start val!')
     # label_info = get_label_info(csv_path)
@@ -70,6 +70,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
     max_miou = 0
     step = 0
     for epoch in range(args.num_epochs):
+    #for epoch in range(args.epoch_start_i, args.num_epochs):   #quando carico il modello
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
         model.train()
         tq = tqdm.tqdm(total=len(dataloader_train) * args.batch_size)
@@ -100,13 +101,12 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
             if not os.path.isdir(args.save_model_path):
                 os.mkdir(args.save_model_path)
             torch.save(model.module.state_dict(),
-                       os.path.join(args.save_model_path, 'latest_dice_loss.pth'))
+                       os.path.join(args.save_model_path, f'latest_dice_loss_epoch_{epoch}.pth'))
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
             if miou > max_miou:
                 max_miou = miou
-                import os 
                 os.makedirs(args.save_model_path, exist_ok=True)
                 torch.save(model.module.state_dict(),
                            os.path.join(args.save_model_path, 'best_dice_loss.pth'))
@@ -119,8 +119,8 @@ def main(params):
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=300, help='Number of epochs to train for')
     parser.add_argument('--epoch_start_i', type=int, default=0, help='Start counting epochs from this number')
-    parser.add_argument('--checkpoint_step', type=int, default=100, help='How often to save checkpoints (epochs)')
-    parser.add_argument('--validation_step', type=int, default=10, help='How often to perform validation (epochs)')
+    parser.add_argument('--checkpoint_step', type=int, default=1000, help='How often to save checkpoints (epochs)')
+    parser.add_argument('--validation_step', type=int, default=100, help='How often to perform validation (epochs)')
     parser.add_argument('--dataset', type=str, default="CamVid", help='Dataset you are using.')
     parser.add_argument('--crop_height', type=int, default=720, help='Height of cropped/resized input image to network')
     parser.add_argument('--crop_width', type=int, default=960, help='Width of cropped/resized input image to network')
@@ -196,15 +196,17 @@ def main(params):
 
 if __name__ == '__main__':
     params = [
-        '--num_epochs', '1000',
+        '--context_path', 'resnet101',  # set resnet18 or resnet101, only support resnet18 and resnet101
+        '--checkpoint_step', '2',
+        '--validation_step', '10',
+        '--num_epochs', '100',
         '--learning_rate', '2.5e-2',
         '--data', './CamVid',
         '--num_workers', '8',
         '--num_classes', '12',
         '--cuda', '0',
         '--batch_size', '4',
-        '--save_model_path', './checkpoints_18_sgd',
-        '--context_path', 'resnet18',  # set resnet18 or resnet101, only support resnet18 and resnet101
+        '--save_model_path', './checkpoints_101_sgd',
         '--optimizer', 'sgd',
 
     ]
