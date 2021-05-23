@@ -3,3 +3,4 @@ runs/
 checkpoints_101_sgd/
 checkpoints_18_sgd/
 
+checkpoints_101_sgd_only_colorjitter/
