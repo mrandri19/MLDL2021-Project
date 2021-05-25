@@ -10,23 +10,25 @@ from utils import get_label_info, one_hot_it, RandomCrop, reverse_one_hot, one_h
 import random
 
 def augmentation(image, label):
-    image = np.flip(image, axis=1)
-    label = np.flip(label, axis=1)
-    # augment images with spatial transformation: Flip, Affine, Rotation, etc...
+    # `.copy()` will create a new image with positive stride, thus avoiding
+    # later issues with pytorch. See https://discuss.pytorch.org/t/torch-from-numpy-not-support-negative-strides/3663/10
+    image = np.flip(image, axis=1).copy()
+    label = np.flip(label, axis=1).copy()
+  
     return image, label
 
 
 def augmentation_pixel(image):
     # augment images with pixel intensity transformation: GaussianBlur, Multiply, etc...
     r = random.randrange(2)
-    if (r==0):
+    if  r == 0:
     #1) gaussian blur: reduces the noise (low-pass filter that preserves low spatial frequency and reduces image noise)
     #it reduces the level of detail
     #std dev su ogni asse: min=2/max=3 -> viene scelto in modo random in questo intervallo  (da provare a modificare?)
     #kernel_size: maggiore il valore maggiore lo smoothing
         transformer = transforms.Compose([transforms.ToTensor(),transforms.GaussianBlur(kernel_size=15, sigma=(2.0, 3.0))])
 
-    if (r==1):
+    if r == 1:
     #2) altering colors
     #brightness: scelto valore random in [max(0, 1 - brightness), 1 + brightness]
     #contrast: scelto valore random in [max(0, 1 - contrast), 1 + contrast]
@@ -34,11 +36,13 @@ def augmentation_pixel(image):
     #hue: scelto valore random in [-hue, hue]
         transformer = transforms.Compose([transforms.ToTensor(), transforms.ColorJitter(brightness=1, contrast=2, saturation=2, hue=0.2)])
 
-    if (r==2):
+    if r == 2:
     #3)  convert image to grayscale
         transformer = transforms.Compose([transforms.ToTensor(),transforms.Grayscale(num_output_channels=3)])
 
-    return (((transformer(image)).permute(1,2,0).numpy())*255).astype(np.uint8)
+    return (
+      transformer(image).permute(1,2,0).numpy() * 255
+    ).astype(np.uint8)
 
 
 class CamVid(torch.utils.data.Dataset):
