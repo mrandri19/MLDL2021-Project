@@ -10,8 +10,11 @@ from utils import get_label_info, one_hot_it, RandomCrop, reverse_one_hot, one_h
 import random
 import json
 
-def augmentation(img, label):
-  return img, label
+def augmentation(image, label):
+  image = np.flip(image, axis=1).copy()
+  label = np.flip(label, axis=1).copy()
+  
+  return image, label
 
 def augmentation_pixel(img):
   return img
@@ -66,19 +69,19 @@ class IDDA(torch.utils.data.Dataset):
     def __getitem__(self, index):
         seed = random.random()
         scale = random.choice(self.scale)
-        scale = (int(self.image_size[0] * scale), int(self.image_size[1] * scale))
+        new_image_size = (int(self.image_size[0] * scale), int(self.image_size[1] * scale))
 
         # Load image and randomly resize and crop
         img = Image.open(self.image_list[index])
         if self.mode == 'train':
-            img = transforms.Resize(scale, Image.BILINEAR)(img)
+            img = transforms.Resize(new_image_size, Image.BILINEAR)(img)
             img = RandomCrop(self.image_size, seed, pad_if_needed=True)(img)
         img = np.array(img)
 
         # Load label and randomly resize and crop like the image
         label = Image.open(self.label_list[index])
         if self.mode == 'train':
-            label = transforms.Resize(scale, Image.NEAREST)(label)
+            label = transforms.Resize(new_image_size, Image.NEAREST)(label)
             label = RandomCrop(self.image_size, seed, pad_if_needed=True)(label)
         label = np.array(label)
 

@@ -20,29 +20,30 @@ def augmentation(image, label):
 
 def augmentation_pixel(image):
     # augment images with pixel intensity transformation: GaussianBlur, Multiply, etc...
-    r = random.randrange(2)
-    if  r == 0:
+    #r = random.randrange(2)
+    #if  r == 0:
     #1) gaussian blur: reduces the noise (low-pass filter that preserves low spatial frequency and reduces image noise)
     #it reduces the level of detail
     #std dev su ogni asse: min=2/max=3 -> viene scelto in modo random in questo intervallo  (da provare a modificare?)
     #kernel_size: maggiore il valore maggiore lo smoothing
-        transformer = transforms.Compose([transforms.ToTensor(),transforms.GaussianBlur(kernel_size=15, sigma=(2.0, 3.0))])
+    #    transformer = transforms.Compose([transforms.ToTensor(),transforms.GaussianBlur(kernel_size=15, sigma=(2.0, 3.0))])
 
-    if r == 1:
+    #if r == 1:
     #2) altering colors
     #brightness: scelto valore random in [max(0, 1 - brightness), 1 + brightness]
     #contrast: scelto valore random in [max(0, 1 - contrast), 1 + contrast]
     #saturation: scelto valore random in [max(0, 1 - saturation), 1 + saturation]
     #hue: scelto valore random in [-hue, hue]
-        transformer = transforms.Compose([transforms.ToTensor(), transforms.ColorJitter(brightness=1, contrast=2, saturation=2, hue=0.2)])
+    #    transformer = transforms.Compose([transforms.ToTensor(), transforms.ColorJitter(brightness=1, contrast=2, saturation=2, hue=0.2)])
 
-    if r == 2:
+    #if r == 2:
     #3)  convert image to grayscale
-        transformer = transforms.Compose([transforms.ToTensor(),transforms.Grayscale(num_output_channels=3)])
+    #    transformer = transforms.Compose([transforms.ToTensor(),transforms.Grayscale(num_output_channels=3)])
 
-    return (
-      transformer(image).permute(1,2,0).numpy() * 255
-    ).astype(np.uint8)
+    #return (
+    #  transformer(image).permute(1,2,0).numpy() * 255
+    #).astype(np.uint8)
+    return image
 
 
 class CamVid(torch.utils.data.Dataset):
@@ -95,15 +96,17 @@ class CamVid(torch.utils.data.Dataset):
 
         # randomly resize image and random crop
         # =====================================
-        if self.mode == 'train':
+        if self.mode == 'train' or self.mode == 'adversarial_train':
             img = transforms.Resize(scale, Image.BILINEAR)(img)
             img = RandomCrop(self.image_size, seed, pad_if_needed=True)(img)
         # =====================================
 
         img = np.array(img)
-        # load label
-        label = Image.open(self.label_list[index])
-
+        if self.mode != 'adversarial_train':
+          label = Image.open(self.label_list[index])
+        else:
+          imarray = np.zeros(shape=(2,2,4)) * 255
+          label = Image.fromarray(imarray.astype('uint8')).convert('RGBA')
 
         # crop the corresponding label
         # =====================================
@@ -112,21 +115,19 @@ class CamVid(torch.utils.data.Dataset):
 
         # randomly resize label and random crop
         # =====================================
-        if self.mode == 'train':
+        if self.mode == 'train' or self.mode == 'adversarial_train':
             label = transforms.Resize(scale, Image.NEAREST)(label)
             label = RandomCrop(self.image_size, seed, pad_if_needed=True)(label)
-        # =====================================
 
         label = np.array(label)
 
-
         # augment image and label
-        if self.mode == 'train':
+        if self.mode == 'train' or self.mode == 'adversarial_train':
             if random.random() < 0.5:
               img, label = augmentation(img, label)
 
         # augment pixel image
-        if self.mode == 'train':
+        if self.mode == 'train' or self.mode == 'adversarial_train':
             # set a probability of 0.5
             if random.random() < 0.5:
               img = augmentation_pixel(img)
@@ -138,10 +139,10 @@ class CamVid(torch.utils.data.Dataset):
 
         if self.loss == 'dice':
             # label -> [num_classes, H, W]
-            label = one_hot_it_v11_dice(label, self.label_info).astype(np.uint8)
+            if self.mode != 'adversarial_train':
+              label = one_hot_it_v11_dice(label, self.label_info).astype(np.uint8)
 
             label = np.transpose(label, [2, 0, 1]).astype(np.float32)
-            # label = label.astype(np.float32)
             label = torch.from_numpy(label)
 
             return img, label

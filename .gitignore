@@ -4,3 +4,8 @@ checkpoints_101_sgd/
 checkpoints_18_sgd/
 
 checkpoints_101_sgd_only_colorjitter/
+checpoint/
+checkpointBeta01/
+checkpointBeta05/
+checkpointBeta09/
+checkpoint_101_adversarial_both_augmentation_epoch_len_IDDA/

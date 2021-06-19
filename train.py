@@ -10,13 +10,13 @@ import tqdm
 import numpy as np
 from utils import poly_lr_scheduler
 from utils import reverse_one_hot, compute_global_accuracy, fast_hist, \
-    per_class_iu
+    per_class_iu, cal_miou, get_label_info
 from loss import DiceLoss
 
 #prova
-def val(args, model, dataloader):
-    print('start val!')
-    # label_info = get_label_info(csv_path)
+def val(args, model, dataloader, csv_path):
+    print('start val!!')
+    label_info = get_label_info(csv_path)
     with torch.no_grad():
         model.eval()
         precision_record = []
@@ -47,17 +47,17 @@ def val(args, model, dataloader):
             # label = colour_code_segmentation(np.array(label), label_info)
             precision_record.append(precision)
         precision = np.mean(precision_record)
-        # miou = np.mean(per_class_iu(hist))
+        miou = np.mean(per_class_iu(hist))
         miou_list = per_class_iu(hist)[:-1]
-        # miou_dict, miou = cal_miou(miou_list, csv_path)
+        miou_dict, miou = cal_miou(miou_list, csv_path)
         miou = np.mean(miou_list)
         print('precision per pixel for test: %.3f' % precision)
         print('mIoU for validation: %.3f' % miou)
-        # miou_str = ''
-        # for key in miou_dict:
-        #     miou_str += '{}:{},\n'.format(key, miou_dict[key])
-        # print('mIoU for each class:')
-        # print(miou_str)
+        miou_str = ''
+        for key in miou_dict:
+            miou_str += '{}:{},\n'.format(key, miou_dict[key])
+        print('mIoU for each class:')
+        print(miou_str)
         return precision, miou
 
 
