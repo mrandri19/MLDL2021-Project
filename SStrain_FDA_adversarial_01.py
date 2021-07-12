@@ -19,6 +19,9 @@ from dataset.CamVid import CamVid
 
 import numpy as np
 
+BEGIN_EPOCH = 31
+NUM_EPOCHS = 50
+
 NUM_CLASSES = 12
 
 CROP_HEIGHT = 720
@@ -37,18 +40,17 @@ POWER = 0.9
 NUM_STEPS = 250000
 ITER_SIZE = 1
 
-BETA = 0.05
+BETA = 0.01
 
 CHECKPOINT_STEP = 5
-CHECKPOINT_PATH = './checkpointBeta05/'
+CHECKPOINT_PATH = './checkpointBeta01_T3/'
 
 BATCH_SIZE_CAMVID = 2
 BATCH_SIZE_IDDA = 2
 
 CAMVID_PATH = ['/content/CamVid/train/', '/content/CamVid/val/']
-CAMVID_TEST_PATH = ['/content/CamVid/test/']
-CAMVID_LABEL_PATH = ['/content/CamVid/train_labels/', '/content/CamVid/val_labels/']
-CAMVID_TEST_LABEL_PATH = ['/content/CamVid/test_labels/']
+CAMVID_PSEUDOLABEL_PATH = ['/content/T2_CamVid_train_pseudolabels']
+
 CSV_CAMVID_PATH = '/content/CamVid/class_dict.csv'
 
 IDDA_PATH = '/content/IDDA/rgb/'
@@ -183,7 +185,7 @@ unnormalize = T.Normalize((-mean/std).tolist(), (1.0 / std).tolist())
 def minibatch(source_dataloader_iter, target_dataloader_iter, generator, discriminator, cross_entropy_loss, bce_loss, source_dataloader, target_dataloader):
   # with Stage('minibatch'):
   # print(f'{torch.cuda.memory_allocated() / 10 ** 9:.2f} GB, {torch.cuda.memory_reserved() / 10 ** 9:.2f} GB')
-  l_seg_to_print, l_adv_to_print, l_d_to_print = 0, 0, 0
+  l_seg_to_print, l_seg_psu_to_print, l_adv_to_print, l_d_to_print = 0, 0, 0, 0
   ##########################################################################
   # TRAIN G (segmentation network)
   ##########################################################################
@@ -207,8 +209,8 @@ def minibatch(source_dataloader_iter, target_dataloader_iter, generator, discrim
   except StopIteration:
     target_dataloader_iter = iter(target_dataloader)
     batch = next(target_dataloader_iter)
-  I_t, _ = batch
-  I_t = I_t.cuda()
+  I_t, Y_t_psu = batch
+  I_t, Y_t_psu = I_t.cuda(), Y_t_psu.cuda()
 
   I_s_unnormalized = unnormalize(I_s)
   I_t_unnormalized = unnormalize(I_t)
@@ -233,16 +235,23 @@ def minibatch(source_dataloader_iter, target_dataloader_iter, generator, discrim
   # Compute P_t = G(I_t)
   P_t, _, _ = generator(I_t)
 
-  # TODO: for stage 2, cross entropy loss of P_t and Y_t_PSU
+  # FDA's pseudolabel loss
+  l_seg_psu = cross_entropy_loss(P_t, torch.argmax(Y_t_psu, dim=1))
+  l_seg_psu_to_print += l_seg_psu.item()
 
   # Compute D(sigma(G(I_t)))
   D_t = discriminator(F.softmax(P_t))
 
   # Compute l_adv: compare D_t with a tensor of the same dimension filled
   # with 0 (SOURCE_LABEL) -> aims to be recognize as source image 
-  l_adv = bce_loss(D_t, torch.full(D_t.size(), SOURCE_LABEL, dtype=torch.float32).cuda()) 
+  l_adv = bce_loss(D_t, torch.full(D_t.size(), SOURCE_LABEL, dtype=torch.float32).cuda())
   l_adv_to_print += l_adv.item()
   l_adv = l_adv/ITER_SIZE # normalization
+  
+  # We are summing these together because we want to backpropagate them together
+  # No retain_graph
+  l_adv += l_seg_psu
+  
   l_adv.backward()
 
   ##########################################################################
@@ -282,9 +291,7 @@ def minibatch(source_dataloader_iter, target_dataloader_iter, generator, discrim
   l_d = l_d / (ITER_SIZE * 2)
   l_d.backward()
 
-  #print(l_seg_to_print, l_adv_to_print, l_d_to_print)
-
-  return l_seg_to_print, l_adv_to_print, l_d_to_print
+  return l_seg_to_print, l_seg_psu_to_print, l_adv_to_print, l_d_to_print
 
 def main():
   # Call Python's garbage collector, and empty torch's CUDA cache. Just in case
@@ -298,11 +305,32 @@ def main():
 
   # Load Bisenet generator
   generator = BiSeNet(NUM_CLASSES, CONTEXT_PATH).cuda()
-  # generator.load_state_dict(torch.load('./checkpoint_101_adversarial_both_augmentation_epoch_len_IDDA/37_Generator.pth'))
+  generator.load_state_dict(torch.load('./checkpointBeta01_T3/0.01_30_Generator.pth'))
+  ##############################################################################
+  # Weight and Biases experiments tracking
+  import wandb
+  wandb.init(config={
+    'begin_epoch': BEGIN_EPOCH,
+    'num_epochs': NUM_EPOCHS,
+
+    'beta': BETA,
+    
+    'context_path': CONTEXT_PATH,
+
+    'batch_size_source': BATCH_SIZE_CAMVID,
+    'batch_size_target': BATCH_SIZE_IDDA,
+    
+    'source_dataloader_image_path': IDDA_PATH,
+    'source_dataloader_label_path': IDDA_LABEL_PATH,
+    'target_dataloader_image_path': CAMVID_PATH,
+    'target_dataloader_label_path': CAMVID_PSEUDOLABEL_PATH,
+  })
+  wandb.watch(generator)
+  ##############################################################################
   generator.train()
   # Build discriminator
   discriminator = Discriminator(NUM_CLASSES).cuda()
-  # discriminator.load_state_dict(torch.load('./checkpoint_101_adversarial_both_augmentation_epoch_len_IDDA/37_Discriminator.pth'))
+  discriminator.load_state_dict(torch.load('./checkpointBeta01_T3/0.01_30_Discriminator.pth'))
   discriminator.train()
 
   # Load source dataset
@@ -326,20 +354,21 @@ def main():
   # Load target dataset
   target_dataset = CamVid(
     image_path=CAMVID_PATH,
-    label_path= CAMVID_LABEL_PATH,csv_path= CSV_CAMVID_PATH,
+    label_path= CAMVID_PSEUDOLABEL_PATH,
+    csv_path= CSV_CAMVID_PATH,
     scale=(CROP_HEIGHT,
     CROP_WIDTH),
     loss=LOSS,
-    mode='adversarial_train'
+    mode='train'
   )
   target_dataloader = DataLoader(
-        target_dataset,
-        batch_size=BATCH_SIZE_CAMVID,
-        shuffle=True,
-        num_workers=NUM_WORKERS,
-        drop_last=True,
-        pin_memory=True
-    )
+    target_dataset,
+    batch_size=BATCH_SIZE_CAMVID,
+    shuffle=True,
+    num_workers=NUM_WORKERS,
+    drop_last=True,
+    pin_memory=True
+  )
 
   optimizer_BiSeNet = torch.optim.SGD(generator.parameters(), lr = LEARNING_RATE_SEGMENTATION, momentum = MOMENTUM, weight_decay = WEIGHT_DECAY)   
   optimizer_discriminator = torch.optim.Adam(discriminator.parameters(), lr = LEARNING_RATE_DISCRIMINATOR, betas = (0.9,0.99))
@@ -352,8 +381,7 @@ def main():
   # Log-softmax layer + 2D Cross Entropy
   cross_entropy_loss = CrossEntropy2d()
 
-  # for epoch in range(NUM_STEPS):
-  for epoch in range(1, 51):
+  for epoch in range(BEGIN_EPOCH, NUM_EPOCHS + 1):
     source_dataloader_iter = iter(source_dataloader)
     target_dataloader_iter = iter(target_dataloader)
 
@@ -364,7 +392,7 @@ def main():
     optimizer_discriminator.zero_grad()
 
     # Setting losses equal to 0
-    l_seg_to_print_acc, l_adv_to_print_acc, l_d_to_print_acc = 0, 0, 0
+    l_seg_to_print_acc, l_seg_psu_to_print_acc, l_adv_to_print_acc, l_d_to_print_acc = 0, 0, 0, 0
 
     # Compute learning rate for this epoch
     adjust_learning_rate(optimizer_BiSeNet, LEARNING_RATE_SEGMENTATION, epoch, NUM_STEPS, POWER)
@@ -373,16 +401,29 @@ def main():
     for i in tqdm(range(len(target_dataloader))):
       optimizer_BiSeNet.zero_grad()
       optimizer_discriminator.zero_grad()
-      l_seg_to_print, l_adv_to_print, l_d_to_print = minibatch(source_dataloader_iter, target_dataloader_iter, generator, discriminator, cross_entropy_loss, bce_loss, source_dataloader, target_dataloader)
+      l_seg_to_print, l_seg_psu_to_print, l_adv_to_print, l_d_to_print = \
+        minibatch(source_dataloader_iter, target_dataloader_iter, generator,
+                  discriminator, cross_entropy_loss, bce_loss,
+                  source_dataloader, target_dataloader)
       l_seg_to_print_acc += l_seg_to_print
+      l_seg_psu_to_print_acc += l_seg_psu_to_print
       l_adv_to_print_acc += l_adv_to_print
       l_d_to_print_acc += l_d_to_print
       # Run optimizers using the gradient obtained via backpropagations
       optimizer_BiSeNet.step()
       optimizer_discriminator.step()
+
+    # TODO(Andrea): see https://docs.wandb.ai/guides/track/log#image-overlays
+    wandb.log({
+      "l_seg_to_print_acc": l_seg_to_print_acc,
+      "l_seg_psu_to_print_acc": l_seg_psu_to_print_acc,
+      "l_adv_to_print_acc": l_adv_to_print_acc,
+      "l_d_to_print_acc": l_d_to_print_acc,
+      'epoch': epoch,
+    })
     
     # Output at each epoch
-    print(f'epoch = {epoch}/{NUM_STEPS}, loss_seg = {l_seg_to_print_acc:.3f}, loss_adv = {l_adv_to_print_acc:.3f}, loss_D = {l_d_to_print_acc:.3f}')
+    print(f'epoch = {epoch}/{NUM_STEPS}, loss_seg = {l_seg_to_print_acc:.3f}, l_seg_psu_to_print_acc={l_seg_psu_to_print_acc:.3f}, loss_adv = {l_adv_to_print_acc:.3f}, loss_D = {l_d_to_print_acc:.3f}')
 
     # Save intermediate generator (checkpoint)
     if epoch % CHECKPOINT_STEP == 0 and epoch != 0:

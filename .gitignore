@@ -9,3 +9,4 @@ checkpointBeta01/
 checkpointBeta05/
 checkpointBeta09/
 checkpoint_101_adversarial_both_augmentation_epoch_len_IDDA/
+wandb/

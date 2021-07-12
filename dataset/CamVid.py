@@ -47,7 +47,7 @@ def augmentation_pixel(image):
 
 
 class CamVid(torch.utils.data.Dataset):
-    def __init__(self, image_path, label_path, csv_path, scale, loss='dice', mode='train'):
+    def __init__(self, image_path, label_path, csv_path, scale, loss='dice', mode='train', return_name=False):
         super().__init__()
         self.mode = mode
         self.image_list = []
@@ -77,6 +77,7 @@ class CamVid(torch.utils.data.Dataset):
         self.image_size = scale
         self.scale = [0.5, 1, 1.25, 1.5, 1.75, 2]
         self.loss = loss
+        self.return_name = return_name
 
     def __getitem__(self, index):
         # load image and crop
@@ -145,9 +146,14 @@ class CamVid(torch.utils.data.Dataset):
             label = np.transpose(label, [2, 0, 1]).astype(np.float32)
             label = torch.from_numpy(label)
 
-            return img, label
+            if self.return_name:
+              return img, label, self.image_list[index]
+            else:
+              return img, label
 
         elif self.loss == 'crossentropy':
+            assert False, "Unimplemented changes"
+
             label = one_hot_it_v11(label, self.label_info).astype(np.uint8)
             # label = label.astype(np.float32)
             label = torch.from_numpy(label).long()
